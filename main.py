@@ -1,11 +1,13 @@
 from sqlite3 import connect
 import aio_pika
-from fastapi import FastAPI, Depends, Request, HTTPException
+from fastapi import FastAPI, Depends, Request, HTTPException, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from contextlib import asynccontextmanager
 from models import Wniosek
 from publisher import send_to_worker
 from database import init_db, get_session
+from sqlmodel import select
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -25,6 +27,15 @@ async def lifespan(_app: FastAPI):
         await connection.close()
 app = FastAPI(lifespan=lifespan)
 
+#CORS for React, zeby widział
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"], # React address
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/wnioski/")
 async def create_wniosek(
         wniosek: Wniosek,
@@ -41,7 +52,7 @@ async def create_wniosek(
 
         await send_to_worker(rabbit_con, {
             "id": wniosek.id,
-            "action": "generuj_pdf",
+            "action": "generate_pdf",
             "title": wniosek.title #dla logów workera
         })
 
@@ -53,3 +64,21 @@ async def create_wniosek(
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=500, detail=f"Błąd serwera: {str(e)}")
+
+@app.get("/wnioski/")
+async def get_wnioski(
+    user: str = Query(...),
+    role: str = Query("user"),     # Rola
+    session: AsyncSession = Depends(get_session)
+):
+    statement = select(Wniosek)
+
+    if role == "payroll":
+        pass
+    else:
+        statement.where(Wniosek.owner== user)
+
+    result = await session.exec(statement)
+    listofwnioski = result.all()
+
+    return listofwnioski

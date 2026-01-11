@@ -15,6 +15,7 @@ class Wniosek(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
         default_factory=datetime.now
     )
+    owner: str
     billing_month: date = Field(description="Format: RRRR-MM-01")
     premia_start: date = Field(description="Data początkowa okresu premii")
     premia_end: date = Field(description="Data końcowa okresu premii")
