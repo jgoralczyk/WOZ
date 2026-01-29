@@ -1,4 +1,5 @@
 import aio_pika
+from aio_pika import DeliveryMode
 import json
 
 async def send_to_worker(connection: aio_pika.RobustConnection, data: dict):
@@ -9,7 +10,7 @@ async def send_to_worker(connection: aio_pika.RobustConnection, data: dict):
         await channel.default_exchange.publish(
             aio_pika.Message(
                 body=json.dumps(data).encode(),
-                delivery_mode=aio_pika.DeliveryMode.Persistent
+                delivery_mode=DeliveryMode.PERSISTENT
             ),
             routing_key="wnioski_queue"
         )

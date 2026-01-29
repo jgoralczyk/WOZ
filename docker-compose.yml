@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # ============== API ==============
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: woz-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://woz_user:woz_password@db:5432/woz_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
+      - JWT_SECRET=${JWT_SECRET:-super-secret-key-change-in-production}
+      - PDF_OUTPUT_DIR=/app/generated_pdfs
+    volumes:
+      - pdf_data:/app/generated_pdfs
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - woz-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============== WORKER ==============
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: woz-worker
+    command: python worker.py
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://woz_user:woz_password@db:5432/woz_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
+      - PDF_OUTPUT_DIR=/app/generated_pdfs
+    volumes:
+      - pdf_data:/app/generated_pdfs
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - woz-network
+
+  # ============== FRONTEND ==============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: woz-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - woz-network
+
+  # ============== DATABASE ==============
+  db:
+    image: postgres:15-alpine
+    container_name: woz-db
+    environment:
+      POSTGRES_USER: woz_user
+      POSTGRES_PASSWORD: woz_password
+      POSTGRES_DB: woz_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - woz-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U woz_user -d woz_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============== RABBITMQ ==============
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: woz-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+    networks:
+      - woz-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+# ============== VOLUMES ==============
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  pdf_data:
+
+# ============== NETWORKS ==============
+networks:
+  woz-network:
+    driver: bridge
