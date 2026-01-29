@@ -41,8 +41,8 @@ SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 async def update_wniosek_status(wniosek_id: int, status: str, pdf_path: str = None):
     """Aktualizuje status wniosku w bazie danych."""
     async with SessionLocal() as session:
-        result = await session.exec(select(Wniosek).where(Wniosek.id == wniosek_id))
-        wniosek = result.first()
+        result = await session.execute(select(Wniosek).where(Wniosek.id == wniosek_id))
+        wniosek = result.scalars().first()
         if wniosek:
             wniosek.status = status
             session.add(wniosek)
@@ -55,8 +55,8 @@ async def update_wniosek_status(wniosek_id: int, status: str, pdf_path: str = No
 async def get_wniosek(wniosek_id: int) -> Wniosek:
     """Pobiera wniosek z bazy danych."""
     async with SessionLocal() as session:
-        result = await session.exec(select(Wniosek).where(Wniosek.id == wniosek_id))
-        return result.first()
+        result = await session.execute(select(Wniosek).where(Wniosek.id == wniosek_id))
+        return result.scalars().first()
 
 
 def generate_pdf(wniosek: Wniosek) -> str:
